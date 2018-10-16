@@ -118,7 +118,7 @@ int main(void)
   /* Initialize interrupts */
   MX_NVIC_Init();
   /* USER CODE BEGIN 2 */
-  init_key_value( ADDRESS_MAPPING(116), ADDRESS_MAPPING(117), ADDRESS_MAPPING(118) );
+  init_key_value( (116), (117), (118) );
   Init_Info();
   /* USER CODE END 2 */
     
