@@ -57,13 +57,13 @@ void BubbleSort( uint32_t array[], int n ){
     }
 }
 
-void init_key_value( uint32_t key_value_int32, uint32_t key_value_string, uint32_t key_value_backup ){
+void init_key_value( uint8_t key_value_int32_flash_index, uint8_t key_value_string_flash_index, uint8_t key_value_backup_flash_index ){
 
-    KEY_VALUE_INT32 = key_value_int32;
-    KEY_VALUE_STRINGS = key_value_string;
-	KEY_VALUE_BACKUP = key_value_backup;
+    KEY_VALUE_INT32 = flash_sector_address(key_value_int32_flash_index);
+    KEY_VALUE_STRINGS = flash_sector_address(key_value_string_flash_index);
+	KEY_VALUE_BACKUP = flash_sector_address(key_value_backup_flash_index);
     
-    uint32_t array[3] = { key_value_int32, key_value_string, key_value_backup };
+    uint32_t array[3] = { KEY_VALUE_INT32, KEY_VALUE_STRINGS, KEY_VALUE_BACKUP };
     
     BubbleSort( array, 3 );
     
@@ -96,7 +96,7 @@ void init_key_value( uint32_t key_value_int32, uint32_t key_value_string, uint32
     if( KEY_VALUE_INT32 ){
         get_key_value( "UINT32_INIT_FLAG", UINT32, ( uint8_t *)&uint32_flag );
         if( uint32_flag != UINT32_INIT_FLAG ){
-            flash_erase( key_value_int32, SECTOR_NUM );
+            flash_erase( KEY_VALUE_INT32, SECTOR_NUM );
             uint32_flag = UINT32_INIT_FLAG;
             set_key_value( "UINT32_INIT_FLAG", UINT32, ( uint8_t *)&uint32_flag );
         }
@@ -105,7 +105,7 @@ void init_key_value( uint32_t key_value_int32, uint32_t key_value_string, uint32
     if( KEY_VALUE_STRINGS ){
         get_key_value( "STRINGS_INIT_FLAG", STRINGS, ( uint8_t *)&strings_flag );
         if( strings_flag == 0 || memcmp( (char *)strings_flag, STRINGS_INIT_FLAG, strlen( STRINGS_INIT_FLAG ) ) != 0 ){
-            flash_erase( key_value_string, SECTOR_NUM );
+            flash_erase( KEY_VALUE_STRINGS, SECTOR_NUM );
             set_key_value( "STRINGS_INIT_FLAG", STRINGS, ( uint8_t *)STRINGS_INIT_FLAG );
         }
     }
@@ -128,25 +128,25 @@ void init_key_value( uint32_t key_value_int32, uint32_t key_value_string, uint32
 }
 
 void key_value_test( void ){
-        
+    volatile bool flag = true;
     volatile uint16_t test_mode = 0x00;
     uint32_t i = 0;
     uint32_t j = 0;
-    for( i = 0; i < 21111; i++ ){
+    for( i = 0; i < 2111; i++ ){
         if( set_key_value( "key_value_test", UINT32, ( uint8_t * )( &i )) ){
             if( get_key_value( "key_value_test", UINT32, ( uint8_t * )( &j )) && j == i ){
                 KEY_VALUE_INFO( "%d\r\n", j );
             }else{
-                while( true );
+                while( flag );
             }
         }else{
-            while( true );
+            while( flag );
         }
     }
 
     uint32_t test_string = 0;
     uint8_t my_string_test[ 16 ] = "";
-    for( uint32_t i = 0; i < 21111; i++ ){
+    for( uint32_t i = 0; i < 2111; i++ ){
         memset( my_string_test, 0, 16 );
         sprintf( (char *)my_string_test, "%d\r\n", i );
         if( set_key_value( "my_string_test", STRINGS, my_string_test ) ){
@@ -155,15 +155,13 @@ void key_value_test( void ){
                 if( test == i ){
                     KEY_VALUE_INFO( "%s", (( uint8_t * )test_string) );
                 }else{
-                    volatile bool flag = true;
                     while( flag );
                 }
             }else{
-                volatile bool flag = true;
                 while( flag );
             }
         }else{
-            while( true );
+            while( flag );
         }
     }
     
@@ -273,7 +271,7 @@ bool move_key_value_back( enum TYPE type ){
             return false;
         }
         
-        #if 1
+        #if 0
             uint32_t *address = (uint32_t *)KEY_VALUE_BACKUP;
             uint16_t i = 0;
             while( *( address + i ) != ERASURE_STATE ){
@@ -295,7 +293,7 @@ bool move_key_value_back( enum TYPE type ){
             return false;
         }
 
-        #if !defined _STM32L_
+        #if 0
             uint32_t *address = (uint32_t *)KEY_VALUE_BACKUP;
             uint16_t i = 0;
             while( *( address + i ) != ERASURE_STATE ){//stm32l151 serial
@@ -311,7 +309,10 @@ bool move_key_value_back( enum TYPE type ){
             }
         #endif
         
+    }else{
+        return stat;
     }
+    
     if( stat ){
         backup_flag( type, false );
     }
@@ -501,7 +502,7 @@ bool get_key_value( char *key, enum TYPE type , uint8_t *value ){
     bool stat = false;
     
     #if SYS
-        static int16_t local_flag = 0;
+        static int8_t local_flag = 0;
         if( local_flag == 0 ){
             xSemaphoreTake( key_value_SemaphoreHandle, portMAX_DELAY );
         }
@@ -593,17 +594,17 @@ bool set_key_value( char *key, enum TYPE type, uint8_t *value ){
                     #endif
                     return false;
                 }
-                if( set_key_value( key, type, value ) == false ){
-                    stat = false;
-                }else{
+                if( set_key_value( key, type, value ) ){
                     stat = true;
+                }else{
+                    stat = false;
                 }
                 #if SYS
                     key_set_flag = true;
                 #endif
+                rewrite_times = 0;
                 return stat;
             }
-            rewrite_times = 0;
             uint32_t* key_address = NULL;
             UINT32_CHECK:
             key_address = __find_key( hash, type );
@@ -618,13 +619,13 @@ bool set_key_value( char *key, enum TYPE type, uint8_t *value ){
             //write to backup
 			if( move_key_value( type ) == false ){
                 KEY_VALUE_INFO("UINT32 write to backup failed\r\n");
-				goto exe;
+				goto exit;
 			}
 			
             if( cycleCount ++ > 5 ){
                 cycleCount = 0;
                 KEY_VALUE_INFO( "UINT32 set_key_value backup failed\r\n" );
-                goto exe;
+                goto exit;
             }
             goto int32_rewrite;
         }
@@ -673,19 +674,18 @@ bool set_key_value( char *key, enum TYPE type, uint8_t *value ){
                     #endif
                     return false;
                 }
-                if( set_key_value( key, type, value ) == false ){
-                    stat = false;
-                }else{
+                if( set_key_value( key, type, value ) ){
                     stat = true;
+                }else{
+                    stat = false;
                 }
                 #if SYS
                     key_set_flag = true;
                 #endif
+                rewrite_times = 0;
                 return stat;
             }
-            rewrite_times = 0;
             volatile uint32_t* key_address = NULL;
-            
             STRINGS_CHECK:
             
             key_address = __find_key( hash, type );
@@ -706,7 +706,7 @@ bool set_key_value( char *key, enum TYPE type, uint8_t *value ){
                 
                 if( ( uint32_t )( key_address + i ) >= ( KEY_VALUE_STRINGS + KEY_VALUE_MAX_SIZE ) ){
                     KEY_VALUE_INFO( "set_key_value Abnormality error\r\n" );
-                    goto exe;
+                    goto exit;
                 }else{
                     goto STRINGS_CHECK;
                 }
@@ -717,19 +717,19 @@ bool set_key_value( char *key, enum TYPE type, uint8_t *value ){
             //write to backup
 			if( move_key_value( type ) == false ){
                 KEY_VALUE_INFO("STRINGS write to backup failed\r\n");
-				goto exe;
+				goto exit;
 			}
             
             if( cycleCount ++ > 5 ){
                 cycleCount = 0;
                 KEY_VALUE_INFO( "STRINGS set_key_value backup failed\r\n" );
-                goto exe;
+                goto exit;
             }
             goto strings_rewrite;
         }
     }
     
-    exe:
+    exit:
     
     #if SYS
         xSemaphoreGive( key_value_SemaphoreHandle );
