@@ -56,7 +56,7 @@ bool CopyBackupArea( void ){
     BOOT_INFO( "Successful erasure of main program area\r\n" );
     
     for( uint8_t i = 0; i < 50; i ++ ){
-        if( !flash_write( (uint8_t *)(ADDRESS_MAPPING( 62 )+ i * 2048), ADDRESS_MAPPING( 11 ) + i * 2048, 2048 ) ){
+        if( !flash_write( (uint8_t *)(( 62 )+ i * 2048), ( 11 ) + i * 2048, 2048 ) ){
             BOOT_INFO( "Backup program to override the main program area failure\r\n" );
             return false;
         }
